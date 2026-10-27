@@ -1,0 +1,58 @@
+{
+  "name": "@quokkaquery/graph",
+  "version": "0.1.0",
+  "description": "Generic reusable graph library with structure representation and traversal methods",
+  "keywords": [
+    "graph",
+    "data-structure",
+    "traversal",
+    "bfs",
+    "dfs",
+    "topological-sort",
+    "typescript"
+  ],
+  "homepage": "https://quokkaquery.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nodlume/graph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Nodlume/graph/issues"
+  },
+  "author": {
+    "name": "QuokkaQuery",
+    "url": "https://quokkaquery.com"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "API.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
