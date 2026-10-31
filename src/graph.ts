@@ -1,8 +1,15 @@
+/**
+ * In-memory `Graph` class: node and edge storage, degree and reachability
+ * queries, BFS/DFS traversal, and topological sort, cycle detection,
+ * Dijkstra, connected components, mapping and subgraph extraction.
+ */
 import type { NodeId, GraphNode, Edge, GraphOptions, Visitor, NodePredicate } from "./types.js";
 
 /**
  * Generic graph with adjacency-list representation.
  * Supports directed and undirected graphs, weighted edges, and common traversals.
+ * Undirected edges are stored as a pair of mirrored directed edges, so
+ * per-node edge lists contain both directions.
  *
  * @typeParam T - Node data type
  * @typeParam E - Edge data type
@@ -14,12 +21,14 @@ export class Graph<T = unknown, E = unknown> {
   private adjOut = new Map<NodeId, Edge<E>[]>(); // outgoing edges
   private adjIn = new Map<NodeId, Edge<E>[]>(); // incoming edges (directed only, for convenience)
 
+  /** Graphs are directed unless `opts.directed` is explicitly `false`. */
   constructor(opts: GraphOptions = {}) {
     this.directed = opts.directed ?? true;
   }
 
   // ── Node operations ──────────────────────────────────────────────
 
+  /** Adds or replaces a node's data; existing edges on `id` are kept. Chainable. */
   addNode(id: NodeId, data: T): this {
     this.nodes.set(id, { id, data });
     if (!this.adjOut.has(id)) this.adjOut.set(id, []);
@@ -35,6 +44,11 @@ export class Graph<T = unknown, E = unknown> {
     return this.nodes.has(id);
   }
 
+  /**
+   * Deletes a node and its edges; returns false if `id` was not a registered node.
+   * Only the first edge between `id` and each other node is removed from that
+   * node's lists, so parallel edges leave dangling entries behind.
+   */
   removeNode(id: NodeId): boolean {
     if (!this.nodes.has(id)) return false;
     this.nodes.delete(id);
@@ -66,6 +80,12 @@ export class Graph<T = unknown, E = unknown> {
 
   // ── Edge operations ──────────────────────────────────────────────
 
+  /**
+   * Appends an edge (weight defaults to 1); parallel edges are allowed. Endpoints
+   * not added via `addNode` get adjacency lists but are not registered nodes:
+   * they are absent from `nodeIds`/`getNode` and skipped by traversal visitors
+   * and `dijkstra`. Chainable.
+   */
   addEdge(from: NodeId, to: NodeId, weight = 1, data?: E): this {
     this.ensureNode(from);
     this.ensureNode(to);
@@ -80,6 +100,7 @@ export class Graph<T = unknown, E = unknown> {
     return this;
   }
 
+  /** First stored edge from `from` to `to`; with parallel edges the others are not returned. */
   getEdge(from: NodeId, to: NodeId): Edge<E> | undefined {
     return this.adjOut.get(from)?.find((e) => e.to === to);
   }
@@ -88,6 +109,10 @@ export class Graph<T = unknown, E = unknown> {
     return this.getEdge(from, to) !== undefined;
   }
 
+  /**
+   * Removes one `from`→`to` edge (and its mirror when undirected); returns false
+   * if none exists. Parallel edges must be removed one call at a time.
+   */
   removeEdge(from: NodeId, to: NodeId): boolean {
     const out = this.adjOut.get(from);
     if (!out) return false;
@@ -114,17 +139,23 @@ export class Graph<T = unknown, E = unknown> {
     return true;
   }
 
+  /** Number of edges; undirected edges count once despite being stored twice. */
   get edgeCount(): number {
     let count = 0;
     for (const [, edges] of this.adjOut) count += edges.length;
     return this.directed ? count : count / 2;
   }
 
+  /**
+   * All edges. For undirected graphs, one edge per node pair is returned in
+   * whichever direction was seen first, which also collapses parallel edges —
+   * so `mapNodes` and `subgraph` drop undirected parallel edges.
+   */
   edges(): Edge<E>[] {
     const all: Edge<E>[] = [];
     for (const [, edges] of this.adjOut) all.push(...edges);
     if (!this.directed) {
-      // Deduplicate: keep only where from <= to (by string comparison)
+      // Deduplicate: keep the first-seen direction of each node pair
       const seen = new Set<string>();
       return all.filter((e) => {
         const key = `${e.from}->${e.to}`;
@@ -330,7 +361,7 @@ export class Graph<T = unknown, E = unknown> {
 
   /**
    * Topological sort (Kahn's algorithm). Returns node ids in topological order.
-   * Throws if the graph has a cycle. Only meaningful for directed graphs.
+   * Throws if the graph is undirected or has a cycle.
    */
   topologicalSort(): NodeId[] {
     if (!this.directed) throw new Error("Topological sort requires a directed graph");
@@ -398,7 +429,9 @@ export class Graph<T = unknown, E = unknown> {
   /**
    * Dijkstra's shortest path from `start` to `end`.
    * Returns `{ distance, path }` or `undefined` if unreachable.
-   * Edges must have non-negative weights.
+   * Edges must have non-negative weights. `end` must be a registered node;
+   * otherwise the result is a one-element path with an undefined distance
+   * rather than `undefined`.
    */
   dijkstra(
     start: NodeId,
